@@ -1,0 +1,72 @@
+---
+- name: provisioning web server
+  hosts: web
+  become: yes
+  vars: 
+    repo_url: https://github.com/dsolovew/nginxpage.git
+    path1: /var/www/
+ 
+  tasks:
+  - name: "apt update"
+    apt: 
+      update_cache: yes
+      cache_valid_time: 3600
+
+  - name: "ensure packages is present"
+    apt: name={{item}} state=present
+    with_items:
+       - nginx
+       - zsh
+       - wget
+  
+  - name: "remove directory /var/www/"
+    file:
+      path: /var/www/
+      state: absent
+
+  - name: "git clone"
+    git:
+      repo: "{{ repo_url }}"
+      dest: "{{ path1 }}"
+
+  - name: "delete default nginx conf"
+    file:
+      path: /etc/nginx/sites-enabled/default
+      state: absent
+    notify: restart nginx
+
+  - name: "copy nginx config"
+    template: 
+      src: nginx_conf.j2
+      dest: /etc/nginx/sites-enabled/nginx_conf
+      mode: '0644'
+    notify: restart nginx
+
+  - name: "sysctl set fs.file-max"
+    sysctl:
+      name: fs.file-max
+      value: 1204000
+      state: present
+      reload: yes
+
+  - name: "sysctl set net.core.somaxconn"
+    sysctl:
+      name: net.core.somaxconn
+      value: 65535
+      state: present
+      reload: yes
+
+  - name: "Set authorized key"
+    authorized_key:
+      user: root
+      state: present
+      key: '{{ item }}'
+    with_file:
+      - key1.pub
+      - key2.pub 
+    
+  handlers:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted   
